@@ -5,9 +5,8 @@ erDiagram
     USER ||--o{ ORDER : places
     USER ||--o{ PAYMENT : makes
     ORDER ||--|{ ORDER_ITEM : contains
-    ORDER ||--o{ PAYMENT : paid_by
+    ORDER ||--|| PAYMENT : paid_by
     PRODUCT ||--o{ ORDER_ITEM : snapshot_source
-    PAYMENT ||--o{ PAYMENT_EVENT : provider_events
 
     USER {
         ObjectId _id
@@ -34,6 +33,7 @@ erDiagram
         ObjectId customer
         number totalAmount
         string currency
+        string paymentMethod
         string status
         string paymentStatus
     }
@@ -48,14 +48,10 @@ erDiagram
         ObjectId _id
         ObjectId order
         ObjectId customer
-        string providerReference
+        string method
+        string transactionReference
         number amount
         string status
-    }
-    PAYMENT_EVENT {
-        string providerEventId
-        string type
-        datetime processedAt
     }
 ```
 

@@ -77,33 +77,26 @@ Checkout accepts product IDs and quantities, loads current prices from MongoDB,
 and atomically decrements stock using conditional single-document updates. If
 order creation fails, decremented stock is restored. There is no multi-document
 transaction dependency, so ordinary standalone MongoDB and Atlas both work.
-An order reserves/deducts stock immediately for 30 minutes. The backend's
-expiration job releases unpaid reservations even when a customer never starts
-Stripe Checkout. A terminal Stripe failure or expired checkout releases stock
-once; successful payment keeps the deduction.
+Cash-on-delivery stock remains reserved until the order is cancelled or an
+administrator confirms collection. Bank and wallet transfer reservations expire
+after `PAYMENT_RESERVATION_HOURS` (default 24); the expiration job releases
+unpaid stock.
 The configured currency is `PAYMENT_CURRENCY` (default `usd`); the request
 cannot select or alter prices/currency.
 
-## Stripe test payments
+## Payment methods
 
-Use Stripe test credentials only during development. Set `STRIPE_SECRET_KEY`
-and `STRIPE_WEBHOOK_SECRET`, and set `PAYMENT_RETURN_URL` to the future frontend
-base URL. Create a test webhook endpoint for
-`/api/v1/payments/webhook` and subscribe to:
+The API offers cash on delivery, JazzCash, Easypaisa, and bank transfer. Wallet
+and bank methods are **manual transfers**, not live gateway integrations: set
+the account details in `.env`, the customer transfers the order total and
+submits a transaction reference, and an administrator confirms or rejects it.
+`GET /api/v1/payments/options` reports which methods are configured. Digital
+methods stay disabled until their required account details are set. No Stripe
+checkout or webhook is used.
 
-- `checkout.session.completed`
-- `checkout.session.async_payment_succeeded`
-- `checkout.session.async_payment_failed`
-- `checkout.session.expired`
-
-The webhook verifies Stripe's signature against the raw request body, records
-provider event IDs uniquely, and handles repeated deliveries idempotently. An
-API redirect is not treated as payment confirmation. Automated tests use
-Stripe's signed test webhook helper and never contact Stripe. Stripe account
-availability and supported payment methods depend on the merchant's country;
-live credentials are not included. A failed card attempt does not immediately
-release inventory because Checkout permits another attempt within the same
-session; terminal asynchronous failure or expiration does.
+JazzCash and Easypaisa gateway checkout can be added later with merchant
+accounts, provider credentials, and their official signature/callback flows.
+Never mark a transfer as paid based only on a customer-submitted reference.
 
 ## API reference
 
@@ -128,12 +121,14 @@ being acknowledged.
 | POST | `/api/v1/products` | Admin | Create product; multipart image field is `image` |
 | PATCH | `/api/v1/products/:id` | Admin | Update product fields/image |
 | DELETE | `/api/v1/products/:id` | Admin | Deactivate product (soft delete) |
-| POST | `/api/v1/orders` | Customer/admin | `{items:[{productId,quantity}]}` |
+| POST | `/api/v1/orders` | Customer/admin | `{items:[{productId,quantity}],paymentMethod}` |
 | GET | `/api/v1/orders` | Customer/admin | List own orders; admin sees all |
 | GET | `/api/v1/orders/:id` | Owner/admin | Order details |
-| POST | `/api/v1/payments/create-checkout-session` | Owner | `{orderId}`; returns Stripe checkout URL |
-| GET | `/api/v1/payments/:id` | Owner/admin | Payment status |
-| POST | `/api/v1/payments/webhook` | Stripe signature | Stripe event receiver |
+| POST | `/api/v1/orders/:id/cancel` | Owner | Cancel a pending order and release inventory |
+| GET | `/api/v1/payments/options` | Public | List payment methods and configured account instructions |
+| POST | `/api/v1/payments/:id/submit-reference` | Owner | `{transactionReference}` for a wallet/bank transfer |
+| PATCH | `/api/v1/payments/:id/review` | Admin | `{decision:"confirm"}` or `{decision:"reject",note}` |
+| GET | `/api/v1/payments/:id` | Owner/admin | Payment status and transfer instructions |
 
 Product list supports `search`, `category`, `minPrice`, `maxPrice`, `inStock`,
 `page`, and `limit` (maximum 100). Orders accept optional `page` and `limit`.
@@ -160,8 +155,8 @@ npm test
 Jest/Supertest use the dedicated test MongoDB deployment/database and do not
 fall back to the development URI. Tests cover registration, duplicate/weak credentials, login,
 refresh/logout revocation, profile permissions, products, order snapshots,
-overselling protection, ownership, Stripe configuration, invalid signatures,
-successful and failed payment state transitions, and repeated webhooks.
+overselling protection, ownership, COD cancellation, manual transfer submission,
+admin payment review, and inventory release.
 
 ## Structure
 
@@ -171,7 +166,7 @@ successful and failed payment state transitions, and repeated webhooks.
 - `models/`: Mongoose schemas and indexes.
 - `routes/`, `controllers/`, `middleware/`, `validators/`: HTTP endpoints and
   request handling.
-- `services/`: Stripe and stock-release business operations.
+- `services/`: manual payment options, stock release, and order expiration.
 - `services/orderExpirationService.js`: expires unpaid reservations and returns stock.
 - `tests/`: automated API tests.
 - `scripts/createAdmin.js`: one-off private administrator creation.

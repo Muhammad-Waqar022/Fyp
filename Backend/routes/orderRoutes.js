@@ -8,6 +8,7 @@ const router = express.Router();
 router.use(protect);
 router.post('/', validators.create, validate, controller.create);
 router.get('/', controller.list);
+router.post('/:id/cancel', validators.idParam, validate, controller.cancel);
 router.get('/:id', validators.idParam, validate, controller.getById);
 
 module.exports = router;

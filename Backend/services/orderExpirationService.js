@@ -6,6 +6,7 @@ async function expirePendingOrders(now = new Date()) {
   const pendingOrders = await Order.find({
     status: 'pending_payment',
     paymentStatus: 'pending',
+    paymentMethod: { $ne: 'cash_on_delivery' },
     reservationExpiresAt: { $lte: now },
   }).limit(100);
 
@@ -16,6 +17,7 @@ async function expirePendingOrders(now = new Date()) {
         _id: order._id,
         status: 'pending_payment',
         paymentStatus: 'pending',
+        paymentMethod: { $ne: 'cash_on_delivery' },
         reservationExpiresAt: { $lte: now },
       },
       { $set: { status: 'expired', paymentStatus: 'expired' } },
@@ -24,7 +26,7 @@ async function expirePendingOrders(now = new Date()) {
     if (!expiredOrder) continue;
 
     await Payment.updateOne(
-      { order: expiredOrder._id, status: 'pending' },
+      { order: expiredOrder._id, status: { $in: ['pending', 'submitted'] } },
       { $set: { status: 'expired' } }
     );
     await releaseInventory(expiredOrder);

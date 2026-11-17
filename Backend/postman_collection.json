@@ -93,18 +93,31 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"items\": [{ \"productId\": \"{{productId}}\", \"quantity\": 1 }]\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"items\": [{ \"productId\": \"{{productId}}\", \"quantity\": 1 }],\n  \"paymentMethod\": \"cash_on_delivery\"\n}" },
             "url": "{{baseUrl}}/orders"
           }
         },
         { "name": "List my orders", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/orders" } },
         {
-          "name": "Create Stripe checkout",
+          "name": "Available payment options",
+          "request": { "method": "GET", "url": "{{baseUrl}}/payments/options" }
+        },
+        {
+          "name": "Submit wallet or bank reference",
           "request": {
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"orderId\": \"{{orderId}}\"\n}" },
-            "url": "{{baseUrl}}/payments/create-checkout-session"
+            "body": { "mode": "raw", "raw": "{\n  \"transactionReference\": \"JZ-123456\"\n}" },
+            "url": "{{baseUrl}}/payments/{{paymentId}}/submit-reference"
+          }
+        },
+        {
+          "name": "Admin confirms payment",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"decision\": \"confirm\"\n}" },
+            "url": "{{baseUrl}}/payments/{{paymentId}}/review"
           }
         },
         { "name": "Payment status", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/payments/{{paymentId}}" } }

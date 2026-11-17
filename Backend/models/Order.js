@@ -23,6 +23,11 @@ const orderSchema = new mongoose.Schema(
     items: { type: [orderItemSchema], required: true, validate: (items) => items.length > 0 },
     totalAmount: { type: Number, required: true, min: 0 },
     currency: { type: String, required: true, lowercase: true, minlength: 3, maxlength: 3 },
+    paymentMethod: {
+      type: String,
+      enum: ['cash_on_delivery', 'jazzcash', 'easypaisa', 'bank_transfer'],
+      required: true,
+    },
     status: {
       type: String,
       enum: ['pending_payment', 'paid', 'cancelled', 'payment_failed', 'expired'],
@@ -35,11 +40,7 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     inventoryReleased: { type: Boolean, default: false },
-    reservationExpiresAt: {
-      type: Date,
-      default: () => new Date(Date.now() + 30 * 60 * 1000),
-      index: true,
-    },
+    reservationExpiresAt: { type: Date, default: null, index: true },
   },
   { timestamps: true }
 );

@@ -10,7 +10,6 @@ const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
-const paymentController = require('./controllers/paymentController');
 
 const app = express();
 
@@ -48,7 +47,6 @@ app.use(
   })
 );
 
-app.use('/api/v1/payments/webhook', express.raw({ type: 'application/json', limit: '1mb' }), paymentController.webhook);
 app.use(express.json({ limit: '1mb' }));
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {

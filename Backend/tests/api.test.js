@@ -1,14 +1,9 @@
 const request = require('supertest');
-const mongoose = require('mongoose');
 const app = require('../app');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
-const Payment = require('../models/Payment');
-const PaymentEvent = require('../models/PaymentEvent');
-const Stripe = require('stripe');
 const jwt = require('jsonwebtoken');
-const stripeService = require('../services/stripeService');
 const { expirePendingOrders } = require('../services/orderExpirationService');
 
 afterEach(() => {
@@ -235,7 +230,7 @@ describe('orders and inventory', () => {
     const response = await request(app)
       .post('/api/v1/orders')
       .set('Authorization', `Bearer ${token}`)
-      .send({ items: [{ productId: product.id, quantity: 2, unitPrice: 0.01 }] });
+      .send({ items: [{ productId: product.id, quantity: 2, unitPrice: 0.01 }], paymentMethod: 'cash_on_delivery' });
     expect(response.status).toBe(201);
     expect(response.body.data.order.totalAmount).toBe(59.9);
     expect(response.body.data.order.items[0].unitPrice).toBe(29.95);
@@ -250,7 +245,7 @@ describe('orders and inventory', () => {
 
   test('prevents overselling under concurrent checkout requests', async () => {
     const { token, product } = await makeCustomerAndProduct(1);
-    const payload = { items: [{ productId: product.id, quantity: 1 }] };
+    const payload = { items: [{ productId: product.id, quantity: 1 }], paymentMethod: 'cash_on_delivery' };
     const results = await Promise.all([
       request(app).post('/api/v1/orders').set('Authorization', `Bearer ${token}`).send(payload),
       request(app).post('/api/v1/orders').set('Authorization', `Bearer ${token}`).send(payload),
@@ -265,19 +260,21 @@ describe('orders and inventory', () => {
     const response = await request(app)
       .post('/api/v1/orders')
       .set('Authorization', `Bearer ${token}`)
-      .send({ items: [{ productId: product.id, quantity: 0 }], totalAmount: 0 });
+      .send({ items: [{ productId: product.id, quantity: 0 }], totalAmount: 0, paymentMethod: 'cash_on_delivery' });
     expect(response.status).toBe(400);
   });
 
   test('automatically expires unpaid orders and releases reserved stock only once', async () => {
+    process.env.JAZZCASH_ACCOUNT_TITLE = 'Example Store';
+    process.env.JAZZCASH_ACCOUNT_NUMBER = '03000000000';
     const { token, product } = await makeCustomerAndProduct(2);
     const created = await request(app)
       .post('/api/v1/orders')
       .set('Authorization', `Bearer ${token}`)
-      .send({ items: [{ productId: product.id, quantity: 1 }] });
+      .send({ items: [{ productId: product.id, quantity: 1 }], paymentMethod: 'jazzcash' });
     expect(created.status).toBe(201);
 
-    const future = new Date(Date.now() + 31 * 60 * 1000);
+    const future = new Date(Date.now() + 25 * 60 * 60 * 1000);
     expect(await expirePendingOrders(future)).toBe(1);
     expect(await expirePendingOrders(future)).toBe(0);
     expect((await Order.findById(created.body.data.order._id)).status).toBe('expired');
@@ -285,163 +282,132 @@ describe('orders and inventory', () => {
   });
 });
 
-describe('payments and Stripe webhooks', () => {
-  async function makePendingOrder() {
+describe('manual payment methods', () => {
+  function configureTransferMethods() {
+    process.env.JAZZCASH_ACCOUNT_TITLE = 'Example Store';
+    process.env.JAZZCASH_ACCOUNT_NUMBER = '03000000000';
+    process.env.EASYPAISA_ACCOUNT_TITLE = 'Example Store';
+    process.env.EASYPAISA_ACCOUNT_NUMBER = '03111111111';
+    process.env.BANK_ACCOUNT_TITLE = 'Example Store';
+    process.env.BANK_NAME = 'Example Bank';
+    process.env.BANK_ACCOUNT_NUMBER = '123456789';
+  }
+
+  async function createCustomerOrder(paymentMethod) {
     const customer = await register();
-    const user = await User.findOne({ email: 'customer@example.com' });
     const product = await Product.create({
       name: 'Desk Lamp', description: 'LED lamp', price: 20, category: 'Home', stockQuantity: 4,
     });
-    await Product.updateOne({ _id: product.id }, { $inc: { stockQuantity: -1 } });
-    const order = await Order.create({
-      customer: user.id,
-      items: [{ product: product.id, productName: product.name, quantity: 1, unitPrice: 20, subtotal: 20 }],
-      totalAmount: 20,
-      currency: 'usd',
-    });
-    return { token: customer.body.data.accessToken, product, order };
+    const response = await request(app)
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${customer.body.data.accessToken}`)
+      .send({ items: [{ productId: product.id, quantity: 1 }], paymentMethod });
+    return { token: customer.body.data.accessToken, product, response };
   }
 
-  test('payment initiation requires configured Stripe test credentials', async () => {
-    const { token, order } = await makePendingOrder();
-    delete process.env.STRIPE_SECRET_KEY;
-    const response = await request(app)
-      .post('/api/v1/payments/create-checkout-session')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ orderId: order.id });
-    expect(response.status).toBe(503);
-  });
+  test('lists COD and transfer choices, disabling transfer methods without account details', async () => {
+    delete process.env.JAZZCASH_ACCOUNT_TITLE;
+    delete process.env.JAZZCASH_ACCOUNT_NUMBER;
+    delete process.env.EASYPAISA_ACCOUNT_TITLE;
+    delete process.env.EASYPAISA_ACCOUNT_NUMBER;
+    delete process.env.BANK_ACCOUNT_TITLE;
+    delete process.env.BANK_NAME;
+    delete process.env.BANK_ACCOUNT_NUMBER;
+    delete process.env.BANK_IBAN;
 
-  test('creates a Stripe checkout session from trusted order snapshots', async () => {
-    const { token, order } = await makePendingOrder();
-    const createSession = jest.fn().mockResolvedValue({
-      id: 'cs_test_checkout',
-      url: 'https://checkout.stripe.com/test-session',
-      expires_at: Math.floor(Date.now() / 1000) + 1800,
-    });
-    const fakeStripe = { checkout: { sessions: { create: createSession } } };
-    jest.spyOn(stripeService, 'getStripeClient').mockReturnValue(fakeStripe);
-
-    const response = await request(app)
-      .post('/api/v1/payments/create-checkout-session')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ orderId: order.id });
-    expect(response.status).toBe(201);
-    expect(response.body.data.checkoutUrl).toBe('https://checkout.stripe.com/test-session');
-    expect(createSession).toHaveBeenCalledTimes(1);
-    expect(createSession.mock.calls[0][0].line_items[0].price_data.unit_amount).toBe(2000);
-
-    const reused = await request(app)
-      .post('/api/v1/payments/create-checkout-session')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ orderId: order.id });
-    expect(reused.status).toBe(200);
-    expect(createSession).toHaveBeenCalledTimes(1);
-  });
-
-  test('rejects invalid webhook signatures', async () => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_not_a_real_secret';
-    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_secret';
-    const response = await request(app)
-      .post('/api/v1/payments/webhook')
-      .set('stripe-signature', 'invalid')
-      .set('Content-Type', 'application/json')
-      .send('{}');
-    expect(response.status).toBe(400);
-  });
-
-  test('processes signed failed-payment webhook once and releases inventory once', async () => {
-    const { product, order } = await makePendingOrder();
-    const payment = await Payment.create({
-      order: order.id,
-      customer: order.customer,
-      providerReference: 'cs_test_failed',
-      amount: 20,
-      currency: 'usd',
-    });
-    process.env.STRIPE_SECRET_KEY = 'sk_test_not_a_real_secret';
-    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_secret';
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const payload = JSON.stringify({
-      id: 'evt_test_failed_once',
-      object: 'event',
-      type: 'checkout.session.async_payment_failed',
-      data: { object: { id: 'cs_test_failed', object: 'checkout.session', metadata: { paymentId: payment.id } } },
-    });
-    const signature = stripe.webhooks.generateTestHeaderString({
-      payload,
-      secret: process.env.STRIPE_WEBHOOK_SECRET,
-    });
-
-    const first = await request(app)
-      .post('/api/v1/payments/webhook')
-      .set('stripe-signature', signature)
-      .set('Content-Type', 'application/json')
-      .send(payload);
-    const repeated = await request(app)
-      .post('/api/v1/payments/webhook')
-      .set('stripe-signature', signature)
-      .set('Content-Type', 'application/json')
-      .send(payload);
-
-    expect(first.status).toBe(200);
-    expect(repeated.body.duplicate).toBe(true);
-    expect((await Order.findById(order.id)).status).toBe('payment_failed');
-    expect((await Product.findById(product.id)).stockQuantity).toBe(4);
-    expect(await PaymentEvent.countDocuments()).toBe(1);
-    expect(mongoose.connection.readyState).toBe(1);
-  });
-
-  test('marks an order paid only after a valid signed Stripe confirmation', async () => {
-    const { product, order } = await makePendingOrder();
-    const payment = await Payment.create({
-      order: order.id,
-      customer: order.customer,
-      providerReference: 'cs_test_paid',
-      amount: 20,
-      currency: 'usd',
-    });
-    process.env.STRIPE_SECRET_KEY = 'sk_test_not_a_real_secret';
-    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_secret';
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const payload = JSON.stringify({
-      id: 'evt_test_paid_once',
-      object: 'event',
-      type: 'checkout.session.completed',
-      data: {
-        object: {
-          id: 'cs_test_paid',
-          object: 'checkout.session',
-          payment_status: 'paid',
-          amount_total: 2000,
-          currency: 'usd',
-          metadata: { paymentId: payment.id },
-        },
-      },
-    });
-    const signature = stripe.webhooks.generateTestHeaderString({
-      payload,
-      secret: process.env.STRIPE_WEBHOOK_SECRET,
-    });
-    const response = await request(app)
-      .post('/api/v1/payments/webhook')
-      .set('stripe-signature', signature)
-      .set('Content-Type', 'application/json')
-      .send(payload);
-
+    const response = await request(app).get('/api/v1/payments/options');
     expect(response.status).toBe(200);
-    expect((await Order.findById(order.id)).paymentStatus).toBe('paid');
-    expect((await Payment.findById(payment.id)).status).toBe('paid');
+    expect(response.body.data.options.map((option) => option.id)).toEqual([
+      'cash_on_delivery', 'jazzcash', 'easypaisa', 'bank_transfer',
+    ]);
+    expect(response.body.data.options.map((option) => option.enabled)).toEqual([
+      true, false, false, false,
+    ]);
+  });
+
+  test('creates a COD order without an expiry and releases stock when customer cancels', async () => {
+    const { token, product, response } = await createCustomerOrder('cash_on_delivery');
+    expect(response.status).toBe(201);
+    expect(response.body.data.order.reservationExpiresAt).toBeNull();
+    expect(response.body.data.payment.method).toBe('cash_on_delivery');
+    expect((await Product.findById(product.id)).stockQuantity).toBe(3);
+
+    const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    expect(await expirePendingOrders(future)).toBe(0);
+
+    const cancelled = await request(app)
+      .post(`/api/v1/orders/${response.body.data.order._id}/cancel`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(cancelled.status).toBe(200);
+    expect((await Product.findById(product.id)).stockQuantity).toBe(4);
+  });
+
+  test('submits a JazzCash reference and lets an admin confirm payment', async () => {
+    configureTransferMethods();
+    const { token, product, response } = await createCustomerOrder('jazzcash');
+    expect(response.status).toBe(201);
+    expect(response.body.data.payment.accountDetails.accountNumber).toBe('03000000000');
+
+    const paymentId = response.body.data.payment.id;
+    const submitted = await request(app)
+      .post(`/api/v1/payments/${paymentId}/submit-reference`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ transactionReference: 'JZ-123456' });
+    expect(submitted.status).toBe(200);
+    expect(submitted.body.data.payment.status).toBe('submitted');
+    const forbiddenReview = await request(app)
+      .patch(`/api/v1/payments/${paymentId}/review`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'confirm' });
+    expect(forbiddenReview.status).toBe(403);
+
+    const admin = await createAdmin();
+    const adminLogin = await request(app).post('/api/v1/auth/login').send({
+      email: admin.email,
+      password: 'AdminPass1',
+    });
+    const reviewed = await request(app)
+      .patch(`/api/v1/payments/${paymentId}/review`)
+      .set('Authorization', `Bearer ${adminLogin.body.data.accessToken}`)
+      .send({ decision: 'confirm' });
+    expect(reviewed.status).toBe(200);
+    expect(reviewed.body.data.payment.status).toBe('paid');
+    expect((await Order.findById(response.body.data.order._id)).paymentStatus).toBe('paid');
     expect((await Product.findById(product.id)).stockQuantity).toBe(3);
   });
 
-  test('does not allow another customer to create payment for the order', async () => {
-    const { order } = await makePendingOrder();
+  test('rejects a submitted bank transfer and releases its reserved inventory', async () => {
+    configureTransferMethods();
+    const { token, product, response } = await createCustomerOrder('bank_transfer');
+    expect(response.status).toBe(201);
+    const paymentId = response.body.data.payment.id;
+    await request(app)
+      .post(`/api/v1/payments/${paymentId}/submit-reference`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ transactionReference: 'BANK-123456' });
+
+    const admin = await createAdmin();
+    const adminLogin = await request(app).post('/api/v1/auth/login').send({
+      email: admin.email,
+      password: 'AdminPass1',
+    });
+    const rejected = await request(app)
+      .patch(`/api/v1/payments/${paymentId}/review`)
+      .set('Authorization', `Bearer ${adminLogin.body.data.accessToken}`)
+      .send({ decision: 'reject', note: 'Reference not found.' });
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.data.payment.status).toBe('rejected');
+    expect((await Product.findById(product.id)).stockQuantity).toBe(4);
+  });
+
+  test('does not allow another customer to submit a payment reference', async () => {
+    configureTransferMethods();
+    const { response } = await createCustomerOrder('easypaisa');
     const other = await register('other@example.com');
-    const response = await request(app)
-      .post('/api/v1/payments/create-checkout-session')
+    const attempt = await request(app)
+      .post(`/api/v1/payments/${response.body.data.payment.id}/submit-reference`)
       .set('Authorization', `Bearer ${other.body.data.accessToken}`)
-      .send({ orderId: order.id });
-    expect(response.status).toBe(404);
+      .send({ transactionReference: 'EP-123456' });
+    expect(attempt.status).toBe(409);
   });
 });

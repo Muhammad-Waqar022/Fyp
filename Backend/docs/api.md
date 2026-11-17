@@ -45,9 +45,10 @@ PNG, or WebP signatures.
 
 | Endpoint | Request body | Success response |
 |---|---|---|
-| `POST /orders` | `{"items":[{"productId":"<MongoDB id>","quantity":2}]}` | `{"order":{"orderNumber":"ORD-...","items":[{"product":"...","productName":"Bag","quantity":2,"unitPrice":24.99,"subtotal":49.98}],"totalAmount":49.98,"currency":"usd","status":"pending_payment","paymentStatus":"pending"}}` (201) |
+| `POST /orders` | `{"items":[{"productId":"<MongoDB id>","quantity":2}],"paymentMethod":"jazzcash"}` | `{"order":{"orderNumber":"ORD-...","paymentMethod":"jazzcash","totalAmount":49.98,"currency":"usd","status":"pending_payment","paymentStatus":"pending"},"payment":{"id":"...","method":"jazzcash","status":"pending","accountDetails":{"accountTitle":"Example Store","accountNumber":"..."}}}` (201) |
 | `GET /orders?page=1&limit=20` | None | `{"orders":[...],"pagination":{"page":1,"limit":20,"total":1,"pages":1}}` (200) |
 | `GET /orders/:id` | None | `{"order":{...}}` (200) |
+| `POST /orders/:id/cancel` | None | Cancels a pending order and restores reserved inventory (200) |
 
 The server chooses the price and currency from trusted configuration. A
 customer sees only their own orders; an administrator may list/retrieve all.
@@ -56,11 +57,14 @@ customer sees only their own orders; an administrator may list/retrieve all.
 
 | Endpoint | Request body | Success response |
 |---|---|---|
-| `POST /payments/create-checkout-session` | `{"orderId":"<MongoDB id>"}` | `{"paymentId":"...","checkoutUrl":"https://checkout.stripe.com/...","expiresAt":"..."}` (201; repeated active request reuses the session with 200) |
-| `GET /payments/:id` | None | `{"payment":{"order":"...","provider":"stripe","amount":49.98,"currency":"usd","status":"pending"}}` (200); checkout URL is excluded |
-| `POST /payments/webhook` | Stripe-generated signed raw JSON body | `{"received":true}`; duplicate event returns `{"received":true,"duplicate":true}` (200) |
+| `GET /payments/options` | None | Lists `cash_on_delivery`, `jazzcash`, `easypaisa`, and `bank_transfer`, including whether each is configured |
+| `POST /payments/:id/submit-reference` | `{"transactionReference":"JZ-123456"}` | Changes a configured wallet/bank payment from `pending` to `submitted` |
+| `PATCH /payments/:id/review` | Admin: `{"decision":"confirm"}` or `{"decision":"reject","note":"..."}` | Confirms/rejects the payment and updates the order (200) |
+| `GET /payments/:id` | None | Owner/admin gets payment status and configured transfer instructions (200) |
 
-The checkout URL is returned only at initiation. Paid order status changes only
-after the matching signed Stripe event, including its expected amount and
-currency, has been confirmed. Do not use the browser success redirect as proof
-of payment.
+Wallet and bank transfers are manually verified. The backend does not connect to
+JazzCash or Easypaisa gateway APIs and never treats the submitted reference as
+proof of payment. Only an administrator can confirm collection/transfer.
+Configure account information in the backend `.env`; unconfigured transfer
+methods are disabled. COD orders do not expire automatically; customers can
+cancel pending orders to release inventory.
