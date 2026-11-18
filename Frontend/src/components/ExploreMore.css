@@ -1,0 +1,34 @@
+.explore-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 5% 64px;
+  background: #101010;
+}
+
+.explore-more-button {
+  display: inline-flex;
+  min-width: 190px;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 20px;
+  border: 1px solid #666;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.explore-more-button:hover,
+.explore-more-button:focus-visible {
+  border-color: white;
+  background: white;
+  color: #101010;
+}
+
+.explore-more-button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 4px;
+}

@@ -1,0 +1,108 @@
+.lookbook {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  padding: 5%;
+  background: #171717;
+}
+
+.lookbook-image {
+  position: relative;
+  min-height: 490px;
+  overflow: hidden;
+  background: #292725;
+}
+
+.lookbook-image img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+}
+
+.lookbook-image > span {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  padding: 10px 12px;
+  background: rgb(0 0 0 / 72%);
+  color: white;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+
+.lookbook-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(32px, 6vw, 86px);
+  background: #111;
+  color: white;
+}
+
+.lookbook-kicker,
+.lookbook-issue {
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.lookbook-kicker {
+  margin-bottom: 48px;
+  color: #999;
+}
+
+.lookbook-issue {
+  margin-bottom: 15px;
+}
+
+.lookbook-copy h2 {
+  max-width: 480px;
+  font-size: clamp(42px, 5vw, 72px);
+  line-height: 0.96;
+  letter-spacing: -3px;
+}
+
+.lookbook-description {
+  max-width: 390px;
+  margin: 22px 0 28px;
+  color: #aaa;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.lookbook-copy > a {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 0;
+  border-top: 1px solid #444;
+  color: inherit;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-decoration: none;
+}
+
+.lookbook-copy > a:hover {
+  border-color: white;
+}
+
+@media (max-width: 760px) {
+  .lookbook {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .lookbook-image {
+    min-height: 340px;
+  }
+
+  .lookbook-copy {
+    padding: 34px 26px;
+  }
+
+  .lookbook-kicker {
+    margin-bottom: 34px;
+  }
+}

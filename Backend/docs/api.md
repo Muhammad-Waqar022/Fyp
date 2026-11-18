@@ -31,8 +31,8 @@ hashes and refresh-token hashes are never returned.
 
 | Endpoint | Request | Success response |
 |---|---|---|
-| `GET /products?search=bag&category=Accessories&minPrice=2&maxPrice=50&inStock=true&page=1&limit=20` | Query parameters optional | `{"products":[...],"pagination":{"page":1,"limit":20,"total":1,"pages":1}}` (200) |
-| `GET /products/:id` | None | `{"product":{...}}` (200) |
+| `GET /products?search=bag&category=Accessories&minPrice=2&maxPrice=50&inStock=true&page=1&limit=20` | Query parameters optional | `{"products":[...],"categories":["Accessories","Bags"],"currency":"usd","pagination":{"page":1,"limit":20,"total":1,"pages":1}}` (200) |
+| `GET /products/:id` | None | `{"product":{...},"currency":"usd"}` (200) |
 | `POST /products` | Admin; JSON fields `name`, `description`, `price`, `category`, `stockQuantity`; optional multipart image field `image` | `{"product":{...}}` (201) |
 | `PATCH /products/:id` | Admin; any mutable product fields; optional multipart image | `{"product":{...}}` (200) |
 | `DELETE /products/:id` | Admin; none | Deactivated `{"product":{...,"isActive":false}}` (200) |
@@ -40,6 +40,9 @@ hashes and refresh-token hashes are never returned.
 Prices must be positive with at most two decimal places; stock is a
 non-negative integer. Image files must be at most 5 MB and contain valid JPEG,
 PNG, or WebP signatures.
+The product list includes all active categories and the configured
+`PAYMENT_CURRENCY`, so storefront filters and displayed prices can match the
+backend without hard-coded catalog data.
 
 ## Orders
 

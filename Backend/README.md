@@ -71,6 +71,10 @@ JPEG/PNG/WebP MIME and file-signature validation. The resulting URL is
 `/uploads/<generated-name>`. For production deployment, use persistent object
 storage (e.g. Cloudinary) rather than the local filesystem.
 
+For development only, `npm run products:seed-demo` inserts the four sample
+storefront products into the configured database. It skips products whose
+slugs already exist; do not run this command against a production catalog.
+
 ## Orders, inventory, and currency
 
 Checkout accepts product IDs and quantities, loads current prices from MongoDB,

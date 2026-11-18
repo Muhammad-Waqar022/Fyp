@@ -1,0 +1,40 @@
+
+.announcement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 48px;
+  background: #080808;
+  color: white;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+
+.announcement-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  background: #39e75f;
+  border-radius: 50%;
+}
+
+.announcement-right {
+  color: #cccccc;
+}
+
+@media (max-width: 650px) {
+  .announcement {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .announcement-right {
+    display: none;
+  }
+}

@@ -1,0 +1,37 @@
+
+.philosophy {
+  padding: 90px 30px;
+  text-align: center;
+  background: #171717;
+  color: white;
+}
+
+.philosophy-label {
+  color: #999;
+  font-size: 12px;
+  letter-spacing: 3px;
+  margin-bottom: 25px;
+}
+
+.philosophy h2 {
+  font-size: clamp(32px, 5vw, 65px);
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.philosophy-description {
+  max-width: 550px;
+  margin: 25px auto;
+  color: #aaa;
+  line-height: 1.8;
+}
+
+.philosophy a {
+  display: inline-block;
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid white;
+  padding-bottom: 7px;
+  font-size: 12px;
+  letter-spacing: 1px;
+}

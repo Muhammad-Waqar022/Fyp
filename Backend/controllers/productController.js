@@ -9,7 +9,8 @@ const protectedFields = ['name', 'slug', 'description', 'price', 'category', 'st
 exports.list = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-  const filter = req.user && req.user.role === 'admin' ? {} : { isActive: true };
+  const baseFilter = req.user && req.user.role === 'admin' ? {} : { isActive: true };
+  const filter = { ...baseFilter };
 
   if (req.query.category) filter.category = String(req.query.category).trim();
   if (req.query.inStock === true || req.query.inStock === 'true') filter.stockQuantity = { $gt: 0 };
@@ -24,13 +25,19 @@ exports.list = asyncHandler(async (req, res) => {
     filter.name = { $regex: escaped, $options: 'i' };
   }
 
-  const [products, total] = await Promise.all([
+  const [products, total, categories] = await Promise.all([
     Product.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
     Product.countDocuments(filter),
+    Product.distinct('category', baseFilter),
   ]);
   res.status(200).json({
     success: true,
-    data: { products, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
+    data: {
+      products,
+      categories: categories.sort((left, right) => left.localeCompare(right)),
+      currency: (process.env.PAYMENT_CURRENCY || 'usd').toLowerCase(),
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    },
   });
 });
 
@@ -39,7 +46,10 @@ exports.getById = asyncHandler(async (req, res, next) => {
   if (!(req.user && req.user.role === 'admin')) filter.isActive = true;
   const product = await Product.findOne(filter);
   if (!product) return next(new AppError(404, 'Product not found.'));
-  res.status(200).json({ success: true, data: { product } });
+  res.status(200).json({
+    success: true,
+    data: { product, currency: (process.env.PAYMENT_CURRENCY || 'usd').toLowerCase() },
+  });
 });
 
 exports.create = asyncHandler(async (req, res) => {

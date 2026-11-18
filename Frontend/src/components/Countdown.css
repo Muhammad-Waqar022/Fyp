@@ -1,0 +1,35 @@
+
+.countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 45px;
+  background: #151515;
+  color: white;
+  border-top: 1px solid #292929;
+  border-bottom: 1px solid #292929;
+}
+
+.countdown-title {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+.countdown-name {
+  font-size: 15px;
+  font-style: italic;
+}
+
+.countdown-time {
+  font-size: 17px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+@media (max-width: 650px) {
+  .countdown {
+    flex-direction: column;
+    text-align: center;
+  }
+}

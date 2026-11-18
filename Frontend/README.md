@@ -1,16 +1,26 @@
-# React + Vite
+# Storefront frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The storefront reads active products from the backend's public
+`GET /api/v1/products` endpoint. In development, the Vite server proxies API
+and `/uploads` requests to `http://localhost:5000`.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Start MongoDB and configure `Backend/.env`.
+2. Start the backend from `Backend` with `npm run dev`.
+3. Start the storefront from `Frontend` with `npm run dev`.
 
-## React Compiler
+The backend must contain active products to show in the storefront. Product
+creation is admin-only; see the backend README for creating an admin account.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Deployment
 
-## Expanding the ESLint configuration
+Set `VITE_API_URL` to the backend origin when building the frontend, for example
+`https://api.example.com` (no `/api/v1` suffix). The backend must allow the
+deployed frontend origin in its `CLIENT_URL` setting. Product image URLs use
+the same backend origin. If `VITE_API_URL` is empty, the frontend uses
+same-origin `/api/v1` and `/uploads` paths, which requires the production web
+server or CDN to proxy those paths to the backend.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Product prices use the currency returned by the backend, configured through
+`PAYMENT_CURRENCY`.

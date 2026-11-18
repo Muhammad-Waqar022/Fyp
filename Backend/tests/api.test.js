@@ -177,6 +177,8 @@ describe('product management', () => {
     const listed = await request(app).get('/api/v1/products?search=blue&category=Bags&page=1&limit=1');
     expect(listed.status).toBe(200);
     expect(listed.body.data.products).toHaveLength(1);
+    expect(listed.body.data.categories).toEqual(['Bags']);
+    expect(listed.body.data.currency).toBe((process.env.PAYMENT_CURRENCY || 'usd').toLowerCase());
     expect(listed.body.data.pagination.total).toBe(1);
 
     const invalid = await request(app)
